@@ -66,7 +66,6 @@
 #% required: no
 #% multiple: no
 #% description: Set random seed
-#% answer: 1
 #%end
 
 
@@ -103,28 +102,28 @@ def take_step(current_position, num_dir, black_list = None):
     # 4 - directions
     #direction = random.randint(0, num_dir)
     if direction == 0:
-        # Move up
+        # Move up (N)
         new_position = [current_row + 1,current_column]
     elif direction == 1:
-        # Move right
+        # Move right (E)
         new_position = [current_row,current_column + 1]
     elif direction == 2:
-        # Move Down
+        # Move Down (S)
         new_position = [current_row - 1,current_column]
     elif direction == 3:
-        # Move Left
+        # Move Left(W)
         new_position = [current_row,current_column - 1]
     elif direction == 4:
-        # Move Top Right
+        # Move Top Right (NE)
         new_position = [current_row + 1,current_column + 1]
     elif direction == 5:
-        # Move Bottom Right
+        # Move Bottom Right (SE)
         new_position = [current_row - 1,current_column + 1]
     elif direction == 6:
-        # Move Bottom Left
+        # Move Bottom Left (SW)
         new_position = [current_row - 1,current_column - 1]
     elif direction == 7:
-        # Move Top Left
+        # Move Top Left (NW)
         new_position = [current_row + 1,current_column - 1]
     else:
         raise ValueError(f'Unsupported Direction Recieved: {direction}')
@@ -176,13 +175,50 @@ def find_new_path(walk_output, current_pos, new_position, num_directions, step):
     
     return new_position
 
-def random_walk(num_directions, start_pos, walk_output, steps, revisit):
+def avoid_boundary(position, boundary):
+    """
+    Generates a list of directions to avoid, so that the walk can continue in bounds.
+    :param Dict{position: list[row, column], direction: int} position: The last tried position and directions.
+    :param list[row, column] boundary: The maximum row and column values for the region.
+    :return list[int]: A list of directions to avoid, so the bioundary is not crossed.
+    """
+    
+    brows, bcols = boundary
+    prow, pcol = position["position"]
+    new_prow = None
+    new_pcol = None
+    avoid_directions = [position['direction']]
+    if prow > brows:
+        # No North Moves
+        #new_prow = prow - 1
+        avoid_directions.extend([0,4,7])
+    if prow < 0:
+        # No South Moves
+        #new_prow = prow + 1
+        avoid_directions.extend([2,5,6])
+    if pcol > bcols:
+        # No East Moves
+        #new_pcol = pcol- 1
+        avoid_directions.extend([1,4,5])
+    if pcol < 0:
+        # No West Moves
+        #new_pcol = pcol + 1
+        avoid_directions.extend([3,6,7])
+
+    #position['position'] = [new_prow, new_pcol]
+    #position['avoid'] = avoid_directions
+    return avoid_directions
+    
+    
+    
+
+def random_walk(num_directions, boundary, walk_output, steps, revisit):
     """
     Calulates a random walk on a raster surface.
     :param int num_directions: The number of directions to consider on walk. 
         Values represtent either 4 or 8 direction walks and must be set as
         either 4 or 8.
-    :param list[row, column] start_pos:
+    :param list[row, column] boundary:
     :param RasterSegment walk_output:
     :param int steps:
     :param bool revisit: Determines if the walker can revisit a cell it has
@@ -194,7 +230,7 @@ def random_walk(num_directions, start_pos, walk_output, steps, revisit):
     
     
     # Select Random Starting Cell in Matrix
-    start_pos = starting_position(start_pos[0], start_pos[1])
+    start_pos = starting_position(boundary[0], boundary[1])
     #print(f'Starting Position: {start_pos}')
     walk_output.put(start_pos[0],start_pos[1], 2)
     # Walk 100000 steps
@@ -203,7 +239,9 @@ def random_walk(num_directions, start_pos, walk_output, steps, revisit):
         for step in range(steps + 1):
             # Take a randomly selected step in a direction
             new_position = take_step(current_pos, num_directions)
-            
+            if within_boundary(new_position["position"],boundary) == False:
+                avoid_directions =  avoid_boundary(new_position,boundary)
+                new_position = take_step(current_pos, num_directions, black_list=avoid_directions)
             
             if revisit == False:
                 # Don't allow walker to revisit same cell.
@@ -236,12 +274,19 @@ def starting_position(surface_rows, surface_columns):
     #print(f'Start row {start_row}, start column {start_column}')
     return [start_row, start_column]
 
+def within_boundary(position, region):
+    brows, bcols = region
+    prow, pcol = position
+    
+    if prow > brows or prow < 0 or pcol > bcols or pcol < 0:
+        return False
+    else:
+        return True
+
 def main():
     options, flags = gs.parser()
 
-    input_raster = options['input']
-   
-
+    input_raster = options['input'] # Not sure if I want to use a raster or the computational region.
     output_raster = options['output']
 
     steps = int(options['steps'])
@@ -259,12 +304,12 @@ def main():
     # check for revisit flag
     revisit = flags['r']
 
-    #surface = raster.RasterSegment(input_raster, maxmem=memory)
+    ## Same as the comment above, I'm not sure if using an existing raster or computational region is prefered yet.
+    #surface = raster.RasterRow(input_raster)
     #surface.open()
     #surface_rows = surface._rows
     #surface_columns = surface._cols
-    
-    print(f'Creating Performing Walk on Surface with {surface_rows} rows and {surface_columns} columns')
+    #print(f'Creating Performing Walk on Surface with {surface_rows} rows and {surface_columns} columns')
     
     walk_output = raster.RasterSegment(output_raster, maxmem=memory)
     walk_output.open('w', mtype='CELL', overwrite=True)
@@ -273,6 +318,8 @@ def main():
     cols = reg.cols
     rows = reg.rows
     print(f'Region with {rows} rows and {cols} columns')
+    #walk_output = random_walk(directions,[surface_rows, surface_columns],walk_output, steps, revisit)
+
     walk_output = random_walk(directions,[rows, cols],walk_output, steps, revisit)
     walk_output.close()
 
