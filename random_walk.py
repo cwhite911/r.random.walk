@@ -2,8 +2,8 @@
 
 ############################################################################
 #
-# MODULE:       r.random_walk
-# AUTHOR:       Corey White, Center for Geospatial Analytics, North Carolina State University
+# MODULE:       r.random.walk
+# AUTHOR:       Corey T. White, Center for Geospatial Analytics, North Carolina State University
 # PURPOSE:      Performs a random walk on a raster surface.
 # COPYRIGHT:    (C) 2021 Corey White
 #               This program is free software under the GNU General
