@@ -185,28 +185,21 @@ def avoid_boundary(position, boundary):
     
     brows, bcols = boundary
     prow, pcol = position["position"]
-    new_prow = None
-    new_pcol = None
+    
     avoid_directions = [position['direction']]
     if prow > brows:
         # No North Moves
-        #new_prow = prow - 1
         avoid_directions.extend([0,4,7])
     if prow < 0:
         # No South Moves
-        #new_prow = prow + 1
         avoid_directions.extend([2,5,6])
     if pcol > bcols:
         # No East Moves
-        #new_pcol = pcol- 1
         avoid_directions.extend([1,4,5])
     if pcol < 0:
         # No West Moves
-        #new_pcol = pcol + 1
         avoid_directions.extend([3,6,7])
 
-    #position['position'] = [new_prow, new_pcol]
-    #position['avoid'] = avoid_directions
     return avoid_directions
     
     
