@@ -232,7 +232,7 @@ def random_walk(num_directions, boundary, walk_output, steps, revisit):
         for step in range(steps + 1):
             # Take a randomly selected step in a direction
             new_position = take_step(current_pos, num_directions)
-            if within_boundary(new_position["position"],boundary) == False:
+            if out_of_bounds(new_position["position"],boundary):
                 avoid_directions =  avoid_boundary(new_position,boundary)
                 new_position = take_step(current_pos, num_directions, black_list=avoid_directions)
             
@@ -267,14 +267,14 @@ def starting_position(surface_rows, surface_columns):
     #print(f'Start row {start_row}, start column {start_column}')
     return [start_row, start_column]
 
-def within_boundary(position, region):
+def out_of_bounds(position, region):
     brows, bcols = region
     prow, pcol = position
     
     if prow > brows or prow < 0 or pcol > bcols or pcol < 0:
-        return False
-    else:
         return True
+    else:
+        return False
 
 def main():
     options, flags = gs.parser()
