@@ -90,7 +90,7 @@ class TestRandomWalk(TestCase):
             directions="8",
             seed=0,
             flags="sr",
-            overwrite=True
+            overwrite=True,
         )
 
     def test_take_step_dir_4(self):

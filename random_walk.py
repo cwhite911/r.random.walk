@@ -99,7 +99,7 @@ def take_step(current_position, num_dir, black_list=None):
     if black_list is None:
         black_list = []
 
-    if num_dir not in [4,8]:
+    if num_dir not in [4, 8]:
         raise ValueError(f"Unsupported num_dir Recieved: {num_dir}")
 
     direction = random.choice([ele for ele in range(num_dir) if ele not in black_list])
