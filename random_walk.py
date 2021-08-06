@@ -13,7 +13,7 @@
 #############################################################################
 
 #%module
-#% description: Performs a random-walk on a given input raster and returns the resulting walk.
+#% description: Performs a random-walk inside the computational region and returns the resulting walk.
 #% keyword: raster
 #% keyword: select
 #% keyword: random walk
@@ -24,9 +24,9 @@
 #% description: Allow walker to revisit a cell.
 #%end
 
-#%option G_OPT_R_INPUT
-#%label: Name of raster map to use as walk surface
-#%key: input
+#%flag
+#% key: seed
+#% description: Use seed value set from the seed option.
 #%end
 
 #%option G_OPT_R_OUTPUT
@@ -46,9 +46,9 @@
 #% type: string
 #% required: no
 #% multiple: no
-#% options: 4-dir, 8-dir
+#% options: 4, 8
 #% description: How many directions should be used during walk.
-#% answer: 4-dir
+#% answer: 4
 #%end
 
 #%option
@@ -57,7 +57,7 @@
 #% required: no
 #% multiple: no
 #% description: How much memory to use.
-#% answer: 10000
+#% answer: 300
 #%end
 
 #%option
@@ -293,9 +293,6 @@ def out_of_bounds(position, region):
 def main():
     options, flags = gs.parser()
 
-    # input_raster = options[
-    #    "input"
-    # ]  # Not sure if I want to use a raster or the computational region.
     output_raster = options["output"]
 
     steps = int(options["steps"])
@@ -303,12 +300,13 @@ def main():
     directions_option = options["directions"]
 
     # Set numerical values for directions
-    directions = 4 if directions_option == "4-dir" else 8
+    directions = int(directions_option)
 
     memory = options["memory"]
 
-    seed = options["seed"]
-    random.seed(seed)
+    if flags["s"]:
+        seed = options["seed"]
+        random.seed(seed)
 
     # check for revisit flag
     revisit = flags["r"]
