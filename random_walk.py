@@ -93,10 +93,15 @@ def take_step(current_position, num_dir, black_list=None):
     Calculates the next position of walker using either 4 or 8 possible directions.
     :param list[row, column] current_position: A list with current row and column as integers.
     :param int num_dir: The number of directions used in walk. Value must be either 4 or 8.
+    :param list[int] black_list: List of directions that the walker cannot take ranging from 0 - 7.
     :return list[row, column] new_position
     """
     if black_list is None:
         black_list = []
+
+    if num_dir not in [4,8]:
+        raise ValueError(f"Unsupported num_dir Recieved: {num_dir}")
+
     direction = random.choice([ele for ele in range(num_dir) if ele not in black_list])
 
     current_row = current_position[0]
