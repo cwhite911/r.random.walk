@@ -53,7 +53,7 @@ class TestRandomWalk(TestCase):
         """
         self.runModule("g.remove", flags="f", type="raster", name=self.random_walk)
 
-    def test_output(self):
+    def test_random_walk_no_overlap_output(self):
         """Test that random.walk are expected output"""
         # assertModule is used to call module which we test
         # we expect module to finish successfully
@@ -66,9 +66,32 @@ class TestRandomWalk(TestCase):
             flags="s",
         )
 
-        # self.assert(
-        #     self.random_walk, "data/random_walk_result", digits=6, precision=1
-        # )
+    def test_random_walk_with_overlap_output(self):
+        """Test that random.walk are expected output"""
+        # assertModule is used to call module which we test
+        # we expect module to finish successfully
+        self.assertModule(
+            "r.random.walk",
+            output=self.random_walk,
+            steps=1000,
+            overwrite=True,
+            seed=0,
+            flags="sr",
+        )
+
+    def test_random_walk_with_overlap_8_dir_output(self):
+        """Test that random.walk are expected output"""
+        # assertModule is used to call module which we test
+        # we expect module to finish successfully
+        self.assertModule(
+            "r.random.walk",
+            output=self.random_walk,
+            steps=1000,
+            directions="8",
+            seed=0,
+            flags="sr",
+            overwrite=True
+        )
 
     def test_take_step_dir_4(self):
         """
