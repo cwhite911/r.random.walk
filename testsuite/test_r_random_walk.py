@@ -19,7 +19,7 @@
 # Dependencies
 from grass.gunittest.case import TestCase
 from grass.gunittest.main import test
-from random.walk import (
+from r.random.walk import (
     take_step,
     walker_is_stuck,
     avoid_boundary,
