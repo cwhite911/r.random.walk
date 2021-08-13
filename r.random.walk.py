@@ -25,6 +25,12 @@
 #%end
 
 #%flag
+#% key: parallel
+#% description: Run parallel processes.
+#% guisection: Parallel
+#%end
+
+#%flag
 #% key: seed
 #% description: Use seed value set from the seed option.
 #%end
@@ -68,16 +74,51 @@
 #% description: Set random seed
 #%end
 
+#%option
+#% key: nprocs
+#% type: integer
+#% required: yes
+#% multiple: no
+#% answer: 1
+#% description: Number of processes to run in parallel
+#% guisection: Parallel
+#%end
 
+#%option
+#% key: repeat
+#% type: integer
+#% required: no
+#% multiple: no
+#% answer: 10
+#% description: Number of times stochastic simulation is repeated
+#% guisection: Parallel
+#%end
+
+from concurrent.futures.process import BrokenProcessPool
+import os
 import sys
-
+import random
+import concurrent.futures
+import functools
+import atexit
+import math
+from types import prepare_class
 import grass.script as gs
 from grass.pygrass import raster
 from grass.pygrass.gis.region import Region
 from grass.exceptions import CalledModuleError
-import random
 
 # import numpy as np
+TMP_SMOOTH_RASTERS = []
+TMP_RASTERS = []
+PREFIX = "temp_walk_"
+
+
+def cleanup():
+    if TMP_RASTERS:
+        gs.run_command(
+            "g.remove", type="raster", name=TMP_RASTERS, flags="f", quiet=True
+        )
 
 
 class GetOutOfLoop(Exception):
@@ -215,7 +256,7 @@ def avoid_boundary(position, boundary):
     return avoid_directions
 
 
-def random_walk(num_directions, boundary, walk_output, steps, revisit):
+def random_walk(num_directions, boundary, steps, revisit, memory, walk_output_name):
     """
     Calulates a random walk on a raster surface.
     :param int num_directions: The number of directions to consider on walk.
@@ -228,13 +269,17 @@ def random_walk(num_directions, boundary, walk_output, steps, revisit):
         already visited.
     :return RasterSegment
     """
-    # Random Walk
-    print("Starting Random Walk")
 
+    walk_output = raster.RasterSegment(walk_output_name, maxmem=memory)
+    walk_output.open("w", mtype="FCELL", overwrite=True)
     # Select Random Starting Cell in Matrix
     start_pos = starting_position(boundary[0], boundary[1])
+    print(f"Starting Random Walk at position: {start_pos}")
     # print(f'Starting Position: {start_pos}')
-    walk_output.put(start_pos[0], start_pos[1], 2)
+    try:
+        walk_output.put(start_pos[0], start_pos[1], 2)
+    except (AttributeError, ValueError) as err:
+        print(err)
     # Walk 100000 steps
     current_pos = start_pos
     try:
@@ -269,7 +314,10 @@ def random_walk(num_directions, boundary, walk_output, steps, revisit):
         walk_output[current_pos[0], current_pos[1]] = 3
         pass
 
-    return walk_output
+    
+    walk_output.close()
+    
+    return walk_output_name  
 
 
 def starting_position(surface_rows, surface_columns):
@@ -294,9 +342,21 @@ def out_of_bounds(position, region):
     else:
         return False
 
+def run_paralle(tmp_rasters, processes, directions, boundary, steps, revisit, memory):
+    print("Smoothed Walk")
+    # partial_random_walk = functools.partial(random_walk, directions, boundary, steps, revisit)
+    with concurrent.futures.ProcessPoolExecutor(max_workers=processes) as executor:
+        print(tmp_rasters)
+        future_to_raster = {executor.submit(random_walk, directions, boundary, steps, revisit, memory, tmpfile): tmpfile for tmpfile in tmp_rasters}
+
+        return future_to_raster
+
+def chunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
 
 def main():
-    options, flags = gs.parser()
 
     output_raster = options["output"]
 
@@ -323,18 +383,69 @@ def main():
     # surface_columns = surface._cols
     # print(f'Creating Performing Walk on Surface with {surface_rows} rows and {surface_columns} columns')
 
-    walk_output = raster.RasterSegment(output_raster, maxmem=memory)
-    walk_output.open("w", mtype="CELL", overwrite=True)
-
     reg = Region()
     cols = reg.cols
     rows = reg.rows
     print(f"Region with {rows} rows and {cols} columns")
+    boundary = [rows, cols]
+
+    
     # walk_output = random_walk(directions,[surface_rows, surface_columns],walk_output, steps, revisit)
+    parallel = flags["p"]
+    processes = int(options["nprocs"])
+    if parallel:
+        smooth = int(options['repeat'])
+        _tmp_rasters = [f"{PREFIX}{i}" for i in range(0, smooth)]
+        TMP_RASTERS.append(_tmp_rasters)
+        try:
+            chunks_n = math.ceil(smooth / processes)
+            chunks_lst = list(chunks(_tmp_rasters, math.ceil(smooth / chunks_n)))
+            print(f"Tmp Rasters: {_tmp_rasters}")
+            print(f"Chunks: {chunks_lst}")
+            futures = run_paralle(_tmp_rasters, processes, directions, boundary, steps, revisit, memory)
+            chunk_idx = 0
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    data = future.result()
+                    print(f"Data: {data}")
+                    TMP_SMOOTH_RASTERS.append(data)
+                except Exception as exc:
+                    print(f'generated an exception: {exc}')
+    
+            # for future in concurrent.futures.wait(futures, return_when="ALL_COMPLETED").done:
+                # results = future
+                # print(f"Future Results: {future}")
+                # gs.message(_(f"Averaging Chunk {chunk_idx + 1}"))
+                # tmp_chunk = f'tmp_smooth_chunk_{chunk_idx}'
+                # gs.run_command("r.series", input=chunks_lst[chunk_idx], output=tmp_chunk, method='average', overwrite=True)
+                # TMP_SMOOTH_RASTERS.append(tmp_chunk)
+                # chunk_idx += 1
 
-    walk_output = random_walk(directions, [rows, cols], walk_output, steps, revisit)
-    walk_output.close()
+                # gs.message(_(f"Averaging Chunks: {TMP_SMOOTH_RASTERS}"))
+            
+            # gs.run_command("r.series", input=_tmp_rasters, output=output_raster, method='average', overwrite=True)
 
+        except (AttributeError, ValueError, BrokenProcessPool) as err:
+            print(err)
+        finally:
+            gs.message(_(f"Averaging Chunks: {TMP_SMOOTH_RASTERS}"))
+            gs.run_command("r.series", input=TMP_SMOOTH_RASTERS, output=output_raster, method='average', overwrite=True)
+            cleanup()
+
+        
+    else:
+        print("Single Walk")
+        random_walk(
+            directions,
+            boundary,
+            steps,
+            revisit, memory, output_raster)
+
+    
+    # cleanup()
 
 if __name__ == "__main__":
+    options, flags = gs.parser()
+    
+    # atexit.register(cleanup)
     sys.exit(main())
