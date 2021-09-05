@@ -103,8 +103,6 @@ import os
 import sys
 import random
 import concurrent.futures
-from multiprocessing import get_context, TimeoutError
-import functools
 import atexit
 import math
 import queue
@@ -120,7 +118,7 @@ import time
 # import numpy as np
 TMP_SMOOTH_RASTERS = []
 TMP_RASTERS = []
-PREFIX = "temp_walk_"
+PREFIX = "r_random_walk_temp_walk_"
 
 
 def cleanup():
@@ -263,19 +261,15 @@ def avoid_boundary(position, boundary):
     avoid_directions = []
     if prow >= brows:
         # No North Moves
-        # avoid_directions.extend([0, 4, 7])
         avoid_directions.extend([1, 5, 8])
     if prow < 0:
         # No South Moves
-        # avoid_directions.extend([2, 5, 6])
         avoid_directions.extend([3, 6, 7])
     if pcol >= bcols:
         # No East Moves
-        # avoid_directions.extend([1, 4, 5])
         avoid_directions.extend([2, 5, 6])
     if pcol < 0:
         # No West Moves
-        # avoid_directions.extend([3, 6, 7])
         avoid_directions.extend([4, 7, 8])
 
     return avoid_directions
@@ -294,6 +288,10 @@ def random_walk(
     :param int steps:
     :param bool revisit: Determines if the walker can revisit a cell it has
         already visited.
+    :param bool:list[row, column] start_position: A start position for the
+        walk to be used for all concurrent walks or False to generate a new start posisition for each walker.
+    :param int memory: The total memory assigned to the RasterSegment.
+    :param string walk_output_name: The name of raster file getting created.
     :return RasterSegment
     """
 
@@ -301,27 +299,24 @@ def random_walk(
     walk_output.open("w", mtype="FCELL", overwrite=True)
 
     def _create_walker(start_pos):
-        # print(f"Starting Random Walk at position: {start_pos}")
         try:
             walk_output.put(start_pos[0], start_pos[1], 1)
         except (AttributeError, ValueError) as err:
             print(err)
-        # Walk 100000 steps
+
         current_pos = start_pos
         try:
             for step in range(steps + 1):
                 # Take a randomly selected step in a direction
                 out_of_bounds_directions = []
                 new_position = take_step(current_pos, num_directions)
-                # print(f"New position: {new_position['position']},Boundary: {boundary}")
                 while out_of_bounds(new_position["position"], boundary):
                     avoid_directions = avoid_boundary(new_position, boundary)
+                    # Add to list of direction to avoid during the next step.
                     out_of_bounds_directions.extend(avoid_directions)
-                    # print(f"Avoid Directions: {avoid_directions}, Out of Bounds: {out_of_bounds_directions}")
                     new_position = take_step(
                         current_pos, num_directions, black_list=out_of_bounds_directions
                     )
-                    # print(f"Position Out of Bounds: {new_position}")
 
                 if not revisit:
                     # Don't allow walker to revisit same cell.
@@ -399,9 +394,6 @@ def run_paralle(
     if path_sampling:
         start_pos = starting_position(boundary[0], boundary[1])
 
-    # partial_random_walk = functools.partial(
-    #     random_walk, directions, boundary, steps, revisit,start_pos, memory
-    # )
     with concurrent.futures.ProcessPoolExecutor(max_workers=processes) as executor:
         future_to_raster = {
             executor.submit(
@@ -418,19 +410,6 @@ def run_paralle(
         }
 
         return future_to_raster
-
-    # with get_context("spawn").Pool(processes) as pool:
-    #     p = pool.map_async(partial_random_walk, tmp_rasters, chunksize=chunks)
-    #     # p = [pool.apply_async(partial_random_walk, t, chunksize=chunks) for t in tmp_rasters]
-    #     try:
-    #         p.wait(timeout=60 * 2)  # 2 min timeout
-    #         return p
-    #     except (KeyboardInterrupt, CalledModuleError) as err:
-    #         print(f"KeyboardInterupt(wait): {err}")
-    #         return
-    #     except (TimeoutError, CalledModuleError) as err:
-    #         print(f"TimeoutError(wait): {err}")
-    #         return
 
 
 def get_chunks(lst, n):
@@ -479,8 +458,8 @@ def main():
         smooth = int(options["repeat"])
         _tmp_rasters = [f"{PREFIX}{i}" for i in range(0, smooth)]
         TMP_RASTERS.append(_tmp_rasters)
-        # try:
         chunks_n = math.ceil(smooth / processes)
+        # Divide memory into equal chunks for each of the processes
         mem_for_process = math.floor(int(memory) / processes)
         print(f"Memory Per Process: {mem_for_process}")
         chunks_lst = list(get_chunks(_tmp_rasters, math.ceil(smooth / chunks_n)))
@@ -499,14 +478,7 @@ def main():
             chunks,
         )
         print("Getting Future Results")
-        # try:
-        #     results = futures.get(timeout=30)  # 10 min
-        #     # print(results)
-        #     TMP_SMOOTH_RASTERS = results
-        # except (TimeoutError, CalledModuleError) as err:
-        #     print(f"TimeoutError (get): {err}")
-        #     return
-        for future in concurrent.futures.as_completed(futures, timeout=60000):
+        for future in concurrent.futures.as_completed(futures):
             try:
                 data = future.result()
                 # print(f"Data: {data}")
@@ -536,7 +508,6 @@ def main():
                     method="average",
                     overwrite=True,
                 )
-            cleanup()
 
     else:
         print("Single Walk")
@@ -550,5 +521,5 @@ def main():
 if __name__ == "__main__":
     options, flags = gs.parser()
 
-    # atexit.register(cleanup) # Doesn't seem to play well with multiprocessing...
+    atexit.register(cleanup)  # Doesn't seem to play well with multiprocessing...
     sys.exit(main())
