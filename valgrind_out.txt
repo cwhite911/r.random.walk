@@ -1,0 +1,69 @@
+GNU gdb (Ubuntu 9.2-0ubuntu2) 9.2
+Copyright (C) 2020 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+Type "show copying" and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+    <http://www.gnu.org/software/gdb/documentation/>.
+
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from python3...
+(No debugging symbols found in python3)
+Starting program: /usr/bin/python3 r.random.walk.py output=random_walk_p nproc=10 --overwrite memory=3000 steps=100000000 directions=8 -s seed=70 -r
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+[Detaching after fork from child process 22998]
+[Detaching after fork from child process 23000]
+
+Program received signal SIGSEGV, Segmentation fault.
+__memmove_avx_unaligned_erms () at ../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:307
+307	../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S: No such file or directory.
+(gdb) Exception ignored in: <gdb._GdbOutputFile object at 0x7f601af1d310>
+Traceback (most recent call last):
+  File "/usr/share/gdb/python/gdb/__init__.py", line 43, in flush
+    def flush(self):
+KeyboardInterrupt: 
+S: No such file or directory.
+(gdb) bt
+#0  __memmove_avx_unaligned_erms () at ../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:307
+#1  0x00007fffed3d56a9 in memcpy (__len=<optimized out>, __src=0x7fffed442e90, __dest=<optimized out>)
+    at /usr/include/x86_64-linux-gnu/bits/string_fortified.h:34
+#2  Segment_put (SEG=0x7ffff67f46b0, buf=0x7fffed442e90, row=<optimized out>, col=<optimized out>) at put.c:50
+#3  0x00007ffff6b97249 in ?? () from /lib/x86_64-linux-gnu/libffi.so.8
+#4  0x00007ffff6b96629 in ?? () from /lib/x86_64-linux-gnu/libffi.so.8
+#5  0x00007ffff67984de in _ctypes_callproc () from /usr/lib/python3.8/lib-dynload/_ctypes.cpython-38-x86_64-linux-gnu.so
+#6  0x00007ffff6797db7 in ?? () from /usr/lib/python3.8/lib-dynload/_ctypes.cpython-38-x86_64-linux-gnu.so
+#7  0x00000000005149d3 in _PyObject_MakeTpCall ()
+#8  0x000000000050ef2a in _PyEval_EvalFrameDefault ()
+#9  0x000000000051f047 in _PyFunction_Vectorcall ()
+#10 0x0000000000509cff in _PyEval_EvalFrameDefault ()
+#11 0x000000000051f047 in _PyFunction_Vectorcall ()
+#12 0x00000000005312c9 in PyVectorcall_Call ()
+#13 0x000000000050b38d in _PyEval_EvalFrameDefault ()
+#14 0x00000000005086d3 in _PyEval_EvalCodeWithName ()
+#15 0x000000000051f0d3 in _PyFunction_Vectorcall ()
+#16 0x0000000000509cff in _PyEval_EvalFrameDefault ()
+#17 0x0000000000508a52 in _PyEval_EvalCodeWithName ()
+#18 0x0000000000584962 in ?? ()
+#19 0x0000000000585178 in ?? ()
+#20 0x000000000050a91d in _PyEval_EvalFrameDefault ()
+#21 0x0000000000508a52 in _PyEval_EvalCodeWithName ()
+#22 0x000000000051f0d3 in _PyFunction_Vectorcall ()
+#23 0x0000000000509b2e in _PyEval_EvalFrameDefault ()
+#24 0x0000000000508a52 in _PyEval_EvalCodeWithName ()
+#25 0x000000000051f0d3 in _PyFunction_Vectorcall ()
+#26 0x0000000000509b2e in _PyEval_EvalFrameDefault ()
+#27 0x000000000051f047 in _PyFunction_Vectorcall ()
+#28 0x0000000000509b2e in _PyEval_EvalFrameDefault ()
+#29 0x0000000000508045 in _PyEval_EvalCodeWithName ()
+#30 0x00000000005d4de7 in PyEval_EvalCode ()
+#31 0x00000000005f35e5 in ?? ()
+#32 0x00000000005eea73 in ?? ()
+#33 0x00000000005f7625 in ?? ()
+#34 0x00000000005f68fa in PyRun_SimpleFileExFlags ()

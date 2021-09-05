@@ -35,6 +35,11 @@
 #% description: Use seed value set from the seed option.
 #%end
 
+#%flag
+#% key: tpath
+#% description: Each walker starts from the same point.
+#%end
+
 #%option G_OPT_R_OUTPUT
 #%end
 
@@ -147,7 +152,9 @@ def take_step(current_position, num_dir, black_list=None):
     if num_dir not in [4, 8]:
         raise ValueError(f"Unsupported num_dir Recieved: {num_dir}")
 
-    direction = random.choice([ele for ele in range(num_dir) if ele not in black_list])
+    direction = random.choice(
+        [ele for ele in range(num_dir + 1) if ele not in black_list]
+    )
 
     current_row = current_position[0]
     current_column = current_position[1]
@@ -155,27 +162,30 @@ def take_step(current_position, num_dir, black_list=None):
     # # 4 - directions
     # direction = random.randint(0, num_dir)
     if direction == 0:
+        # Stay in place
+        new_position = current_position
+    elif direction == 1:
         # Move up (N)
         new_position = [current_row + 1, current_column]
-    elif direction == 1:
+    elif direction == 2:
         # Move right (E)
         new_position = [current_row, current_column + 1]
-    elif direction == 2:
+    elif direction == 3:
         # Move Down (S)
         new_position = [current_row - 1, current_column]
-    elif direction == 3:
+    elif direction == 4:
         # Move Left(W)
         new_position = [current_row, current_column - 1]
-    elif direction == 4:
+    elif direction == 5:
         # Move Top Right (NE)
         new_position = [current_row + 1, current_column + 1]
-    elif direction == 5:
+    elif direction == 6:
         # Move Bottom Right (SE)
         new_position = [current_row - 1, current_column + 1]
-    elif direction == 6:
+    elif direction == 7:
         # Move Bottom Left (SW)
         new_position = [current_row - 1, current_column - 1]
-    elif direction == 7:
+    elif direction == 8:
         # Move Top Left (NW)
         new_position = [current_row + 1, current_column - 1]
     else:
@@ -250,24 +260,30 @@ def avoid_boundary(position, boundary):
     brows, bcols = boundary
     prow, pcol = position["position"]
 
-    avoid_directions = [position["direction"]]
-    if prow > brows:
+    avoid_directions = []
+    if prow >= brows:
         # No North Moves
-        avoid_directions.extend([0, 4, 7])
+        # avoid_directions.extend([0, 4, 7])
+        avoid_directions.extend([1, 5, 8])
     if prow < 0:
         # No South Moves
-        avoid_directions.extend([2, 5, 6])
-    if pcol > bcols:
+        # avoid_directions.extend([2, 5, 6])
+        avoid_directions.extend([3, 6, 7])
+    if pcol >= bcols:
         # No East Moves
-        avoid_directions.extend([1, 4, 5])
+        # avoid_directions.extend([1, 4, 5])
+        avoid_directions.extend([2, 5, 6])
     if pcol < 0:
         # No West Moves
-        avoid_directions.extend([3, 6, 7])
+        # avoid_directions.extend([3, 6, 7])
+        avoid_directions.extend([4, 7, 8])
 
     return avoid_directions
 
 
-def random_walk(num_directions, boundary, steps, revisit, memory, walk_output_name):
+def random_walk(
+    num_directions, boundary, steps, revisit, start_position, memory, walk_output_name
+):
     """
     Calulates a random walk on a raster surface.
     :param int num_directions: The number of directions to consider on walk.
@@ -285,9 +301,9 @@ def random_walk(num_directions, boundary, steps, revisit, memory, walk_output_na
     walk_output.open("w", mtype="FCELL", overwrite=True)
 
     def _create_walker(start_pos):
-        print(f"Starting Random Walk at position: {start_pos}")
+        # print(f"Starting Random Walk at position: {start_pos}")
         try:
-            walk_output.put(start_pos[0], start_pos[1], 2)
+            walk_output.put(start_pos[0], start_pos[1], 1)
         except (AttributeError, ValueError) as err:
             print(err)
         # Walk 100000 steps
@@ -295,12 +311,17 @@ def random_walk(num_directions, boundary, steps, revisit, memory, walk_output_na
         try:
             for step in range(steps + 1):
                 # Take a randomly selected step in a direction
+                out_of_bounds_directions = []
                 new_position = take_step(current_pos, num_directions)
-                if out_of_bounds(new_position["position"], boundary):
+                # print(f"New position: {new_position['position']},Boundary: {boundary}")
+                while out_of_bounds(new_position["position"], boundary):
                     avoid_directions = avoid_boundary(new_position, boundary)
+                    out_of_bounds_directions.extend(avoid_directions)
+                    # print(f"Avoid Directions: {avoid_directions}, Out of Bounds: {out_of_bounds_directions}")
                     new_position = take_step(
-                        current_pos, num_directions, black_list=avoid_directions
+                        current_pos, num_directions, black_list=out_of_bounds_directions
                     )
+                    # print(f"Position Out of Bounds: {new_position}")
 
                 if not revisit:
                     # Don't allow walker to revisit same cell.
@@ -308,13 +329,13 @@ def random_walk(num_directions, boundary, steps, revisit, memory, walk_output_na
                         walk_output, current_pos, new_position, num_directions, step
                     )
 
-                value = walk_output[
+                value = walk_output.get(
                     new_position["position"][0], new_position["position"][1]
-                ]
+                )
                 # Add up times visited
-                walk_output[
-                    new_position["position"][0], new_position["position"][1]
-                ] = (value + 1)
+                walk_output.put(
+                    new_position["position"][0], new_position["position"][1], value + 1
+                )
 
                 # Update Position
                 current_pos = new_position["position"]
@@ -325,8 +346,13 @@ def random_walk(num_directions, boundary, steps, revisit, memory, walk_output_na
             pass
 
     # Select Random Starting Cell in Matrix
-    start_pos = starting_position(boundary[0], boundary[1])
-    _create_walker(start_pos)
+    if start_position:
+        # Sample the same path with each walker
+        _create_walker(start_position)
+    else:
+        # Select a new starting point with each walker
+        start_pos = starting_position(boundary[0], boundary[1])
+        _create_walker(start_pos)
 
     walk_output.close()
 
@@ -350,43 +376,61 @@ def out_of_bounds(position, region):
     brows, bcols = region
     prow, pcol = position
 
-    if prow > brows or prow < 0 or pcol > bcols or pcol < 0:
+    if prow >= brows or prow < 0 or pcol >= bcols or pcol < 0:
         return True
     else:
         return False
 
 
 def run_paralle(
-    tmp_rasters, processes, directions, boundary, steps, revisit, memory, chunks
+    tmp_rasters,
+    processes,
+    directions,
+    boundary,
+    steps,
+    revisit,
+    path_sampling,
+    memory,
+    chunks,
 ):
     print("Smoothed Walk")
     print(f"Max CPUs: {os.cpu_count()}, Used CPUs: {processes}")
-    partial_random_walk = functools.partial(
-        random_walk, directions, boundary, steps, revisit, memory
-    )
-    # with concurrent.futures.ProcessPoolExecutor(max_workers=processes) as executor:
-    #     print(tmp_rasters)
-    #     future_to_raster = {
-    #         executor.submit(
-    #             random_walk, directions, boundary, steps, revisit, memory, tmpfile
-    #         ): tmpfile
-    #         for tmpfile in tmp_rasters
-    #     }
+    start_pos = False
+    if path_sampling:
+        start_pos = starting_position(boundary[0], boundary[1])
 
-    #     return future_to_raster
+    # partial_random_walk = functools.partial(
+    #     random_walk, directions, boundary, steps, revisit,start_pos, memory
+    # )
+    with concurrent.futures.ProcessPoolExecutor(max_workers=processes) as executor:
+        future_to_raster = {
+            executor.submit(
+                random_walk,
+                directions,
+                boundary,
+                steps,
+                revisit,
+                start_pos,
+                memory,
+                tmpfile,
+            ): tmpfile
+            for tmpfile in tmp_rasters
+        }
 
-    with get_context("spawn").Pool(processes) as pool:
-        p = pool.map_async(partial_random_walk, tmp_rasters, chunksize=chunks)
-        # p = [pool.apply_async(partial_random_walk, t, chunksize=chunks) for t in tmp_rasters]
-        try:
-            p.wait(timeout=60 * 2)  # 2 min timeout
-            return p
-        except (KeyboardInterrupt, CalledModuleError) as err:
-            print(f"KeyboardInterupt(wait): {err}")
-            return
-        except (TimeoutError, CalledModuleError) as err:
-            print(f"TimeoutError(wait): {err}")
-            return
+        return future_to_raster
+
+    # with get_context("spawn").Pool(processes) as pool:
+    #     p = pool.map_async(partial_random_walk, tmp_rasters, chunksize=chunks)
+    #     # p = [pool.apply_async(partial_random_walk, t, chunksize=chunks) for t in tmp_rasters]
+    #     try:
+    #         p.wait(timeout=60 * 2)  # 2 min timeout
+    #         return p
+    #     except (KeyboardInterrupt, CalledModuleError) as err:
+    #         print(f"KeyboardInterupt(wait): {err}")
+    #         return
+    #     except (TimeoutError, CalledModuleError) as err:
+    #         print(f"TimeoutError(wait): {err}")
+    #         return
 
 
 def get_chunks(lst, n):
@@ -427,7 +471,7 @@ def main():
     rows = reg.rows
     print(f"Region with {rows} rows and {cols} columns")
     boundary = [rows, cols]
-
+    path_sampling = flags["t"]
     # walk_output = random_walk(directions,[surface_rows, surface_columns],walk_output, steps, revisit)
     parallel = flags["p"]
     processes = int(options["nprocs"])
@@ -440,6 +484,7 @@ def main():
         mem_for_process = math.floor(int(memory) / processes)
         print(f"Memory Per Process: {mem_for_process}")
         chunks_lst = list(get_chunks(_tmp_rasters, math.ceil(smooth / chunks_n)))
+        print(list(map(lambda x: len(x), chunks_lst)))
         chunks = len(chunks_lst)
         print(f"Chunks: {chunks}")
         futures = run_paralle(
@@ -449,41 +494,53 @@ def main():
             boundary,
             steps,
             revisit,
+            path_sampling,
             mem_for_process,
             chunks,
         )
         print("Getting Future Results")
-        try:
-            results = futures.get(timeout=30)  # 10 min
-            # print(results)
-            TMP_SMOOTH_RASTERS = results
-        except (TimeoutError, CalledModuleError) as err:
-            print(f"TimeoutError (get): {err}")
-            return
-        # for future in concurrent.futures.as_completed(futures, timeout=60000):
-        #     try:
-        #         data = future.result()
-        #         print(f"Data: {data}")
-        #         TMP_SMOOTH_RASTERS.append(data)
-        #     except Exception as exc:
-        #         print(f"generated an exception: {exc}")
-        #     else:
-        #         continue
+        # try:
+        #     results = futures.get(timeout=30)  # 10 min
+        #     # print(results)
+        #     TMP_SMOOTH_RASTERS = results
+        # except (TimeoutError, CalledModuleError) as err:
+        #     print(f"TimeoutError (get): {err}")
+        #     return
+        for future in concurrent.futures.as_completed(futures, timeout=60000):
+            try:
+                data = future.result()
+                # print(f"Data: {data}")
+                TMP_SMOOTH_RASTERS.append(data)
+            except Exception as exc:
+                print(f"generated an exception: {exc}")
+            else:
+                continue
 
-        gs.message((f"Averaging Chunks: {len(TMP_SMOOTH_RASTERS)}"))
+        gs.message((f"Averaging: {len(TMP_SMOOTH_RASTERS)} Rasters"))
         if len(TMP_SMOOTH_RASTERS) > 0:
-            gs.run_command(
-                "r.series",
-                input=TMP_SMOOTH_RASTERS,
-                output=output_raster,
-                method="average",
-                overwrite=True,
-            )
+            # 1024 is the soft limit for most computures for number of allowed open files
+            if len(TMP_SMOOTH_RASTERS) >= 1024:
+                gs.run_command(
+                    "r.series",
+                    input=TMP_SMOOTH_RASTERS,
+                    output=output_raster,
+                    method="average",
+                    overwrite=True,
+                    flags="z",
+                )
+            else:
+                gs.run_command(
+                    "r.series",
+                    input=TMP_SMOOTH_RASTERS,
+                    output=output_raster,
+                    method="average",
+                    overwrite=True,
+                )
             cleanup()
 
     else:
         print("Single Walk")
-        random_walk(directions, boundary, steps, revisit, memory, output_raster)
+        random_walk(directions, boundary, steps, revisit, False, memory, output_raster)
 
     # cleanup()
     end = time.time()
